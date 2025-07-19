@@ -1,0 +1,40 @@
+# Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Data Processing
+numpy>=1.21.0
+opencv-python>=4.5.0
+Pillow>=8.0.0
+pandas>=1.3.0
+
+# Visualization and Monitoring
+matplotlib>=3.5.0
+seaborn>=0.11.0
+tensorboard>=2.8.0
+wandb>=0.12.0
+
+# Machine Learning Utils
+scikit-learn>=1.0.0
+tqdm>=4.62.0
+
+# Image Augmentation
+albumentations>=1.3.0
+
+# Pre-built Models
+segmentation-models-pytorch>=0.3.0
+
+# Configuration and Utilities
+PyYAML>=6.0
+argparse
+pathlib
+json5>=0.9.0
+
+# Jupyter (optional for experimentation)
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Development and Testing (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=4.0.0
