@@ -2,6 +2,9 @@
 torch>=2.0.0
 torchvision>=0.15.0
 
+# Object Detection Framework
+detectron2>=0.6.0
+
 # Data Processing
 numpy>=1.21.0
 opencv-python>=4.5.0
@@ -29,6 +32,13 @@ PyYAML>=6.0
 argparse
 pathlib
 json5>=0.9.0
+
+# COCO Dataset API
+pycocotools>=2.0.0
+
+# Additional Data Processing
+imageio>=2.9.0
+scipy>=1.7.0
 
 # Jupyter (optional for experimentation)
 jupyter>=1.0.0
