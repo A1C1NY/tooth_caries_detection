@@ -5,14 +5,6 @@ PyTorch + torchvision Faster R-CNN 训练脚本
 使用 torchvision 内置的 Faster R-CNN 模型替代 Detectron2
 保持与原配置文件完全兼容
 
-主要功能：
-1. 加载COCO格式数据集
-2. 使用torchvision的Faster R-CNN模型
-3. 执行模型训练和评估
-4. 保存训练结果和日志
-
-作者: AI助手
-日期: 2025-07-19
 """
 
 import os
