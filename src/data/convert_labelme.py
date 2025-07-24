@@ -84,34 +84,32 @@ class LabelMeToCOCOConverter:
         
         return matched_files
     
-    def split_dataset(self, file_pairs, train_ratio = 0.8, val_ratio = 0.1):
+    def split_dataset(self, file_pairs, train_ratio=0.8, val_ratio=0.2):
         """
-        将数据集分割为训练集、验证集和测试集
+        将数据集分割为训练集和验证集（合并原来的验证集和测试集）
         
         Args:
             file_pairs (list): 匹配的文件对列表 [(image_path, json_path), ...]
             train_ratio (float): 训练集比例
-            val_ratio (float): 验证集比例
+            val_ratio (float): 验证集比例（原验证集+测试集）
             
         Returns:
-            tuple: (train_files, val_files, test_files)
+            dict: {"train": train_files, "val": val_files}
         """
         random.shuffle(file_pairs)
 
         total_files = len(file_pairs)
         train_count = int(total_files * train_ratio)
-        val_count = int(total_files * val_ratio)
-
+        
+        # 验证集现在包含原来的验证集和测试集
         splits = {
             "train": file_pairs[:train_count],
-            "val": file_pairs[train_count:train_count + val_count],
-            "test": file_pairs[train_count + val_count:]
+            "val": file_pairs[train_count:]  # 剩余的20%全部作为验证集
         }
 
         print(f"数据集划分:")
         print(f"   训练集: {len(splits['train'])} 个文件 ({len(splits['train'])/total_files*100:.1f}%)")
         print(f"   验证集: {len(splits['val'])} 个文件 ({len(splits['val'])/total_files*100:.1f}%)")
-        print(f"   测试集: {len(splits['test'])} 个文件 ({len(splits['test'])/total_files*100:.1f}%)")
         
         return splits
     
@@ -330,7 +328,7 @@ class LabelMeToCOCOConverter:
         
         # 3. 转换每个分割并保存
         annotations_dir = Path(self.config['data']['annotations_dir'])
-        
+
         for split_name, file_pairs in splits.items():
             if file_pairs:  # 只处理非空的分割
                 coco_data = self.convert_spilt(file_pairs, split_name)

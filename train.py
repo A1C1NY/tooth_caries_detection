@@ -5,14 +5,6 @@ PyTorch + torchvision Faster R-CNN 训练脚本
 使用 torchvision 内置的 Faster R-CNN 模型替代 Detectron2
 保持与原配置文件完全兼容
 
-主要功能：
-1. 加载COCO格式数据集
-2. 使用torchvision的Faster R-CNN模型
-3. 执行模型训练和评估
-4. 保存训练结果和日志
-
-作者: AI助手
-日期: 2025-07-19
 """
 
 import os
@@ -284,6 +276,75 @@ def evaluate_model(model, data_loader, device, config):
         'correct_predictions': correct_predictions
     }
 
+class EarlyStopping:
+    """早停类"""
+    def __init__(self, patience=5, min_delta=0.001):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best_score = None
+        self.counter = 0
+        self.early_stop = False
+        
+    def __call__(self, val_score):
+        if self.best_score is None:
+            self.best_score = val_score
+        elif val_score < self.best_score + self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = val_score
+            self.counter = 0
+        
+        return self.early_stop
+
+def load_checkpoint(model, optimizer, lr_scheduler, checkpoint_path):
+    """加载检查点并恢复训练状态"""
+    logger = logging.getLogger(__name__)
+    
+    if os.path.exists(checkpoint_path):
+        logger.info(f"加载检查点: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path)
+        
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state_dict'])
+        
+        start_epoch = checkpoint['epoch'] + 1
+        best_precision = checkpoint.get('best_precision', 0.0)
+        
+        logger.info(f"从第 {start_epoch} 个epoch继续训练")
+        logger.info(f"最佳精度: {best_precision:.4f}")
+        
+        return start_epoch, best_precision
+    else:
+        logger.info("未找到检查点，从头开始训练")
+        return 0, 0.0
+
+def save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path, is_best=False):
+    """保存检查点"""
+    logger = logging.getLogger(__name__)
+    
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'lr_scheduler_state_dict': lr_scheduler.state_dict(),
+        'metrics': metrics,
+        'best_precision': metrics.get('precision', 0.0),
+        'config': config
+    }
+    
+    # 保存最新检查点
+    torch.save(checkpoint, checkpoint_path)
+    logger.info(f"检查点已保存: {checkpoint_path}")
+    
+    # 如果是最佳模型，额外保存一份
+    if is_best:
+        best_path = checkpoint_path.replace('.pth', '_best.pth')
+        torch.save(checkpoint, best_path)
+        logger.info(f"最佳模型已保存: {best_path}")
+
 def save_model_and_logs(model, config, log_file, epoch, metrics):
     """保存模型和日志"""
     logger = logging.getLogger(__name__)
@@ -426,6 +487,15 @@ def main():
             gamma=gamma                  # 使用获取的值
         )
         
+        # 继续训练或评估
+        if args.resume:
+            # 恢复训练
+            checkpoint_path = config['training'].get('checkpoint_path', 'checkpoint.pth')
+            start_epoch, best_precision = load_checkpoint(model, optimizer, lr_scheduler, checkpoint_path)
+        else:
+            start_epoch = 0
+            best_precision = 0.0
+        
         if args.eval_only:
             # 仅评估模式
             logger.info("运行评估模式...")
@@ -448,32 +518,97 @@ def main():
             logger.info(f"  批次大小: {config['data']['dataloader']['batch_size']}")
             logger.info(f"  学习率: {config['training']['base_lr']}")
             
+            # 检查点路径
+            checkpoint_path = os.path.join(config['training']['output_dir'], "checkpoint.pth")
+            
+            # 加载检查点（如果存在且启用resume）
+            start_epoch = 0
             best_precision = 0.0
+            if args.resume:
+                start_epoch, best_precision = load_checkpoint(model, optimizer, lr_scheduler, checkpoint_path)
             
             # 10. 训练循环
-            for epoch in range(total_epochs):
-                logger.info(f"开始第 {epoch+1}/{total_epochs} 个epoch")
-                
-                # 训练
-                avg_loss = train_one_epoch(model, optimizer, train_loader, device, epoch, config)
-                
-                # 更新学习率
-                lr_scheduler.step()
-                
-                # 每隔几个epoch评估一次
-                if (epoch + 1) % 5 == 0 or epoch == total_epochs - 1:
-                    logger.info("进行模型评估...")
-                    metrics = evaluate_model(model, val_loader, device, config)
+            early_stopping = EarlyStopping(patience=5, min_delta=0.001)
+            
+            try:
+                for epoch in range(start_epoch, total_epochs):
+                    logger.info(f"开始第 {epoch+1}/{total_epochs} 个epoch")
                     
-                    # 保存最佳模型
-                    if metrics['precision'] > best_precision:
-                        best_precision = metrics['precision']
-                        save_model_and_logs(model, config, log_file, epoch, metrics)
-                        logger.info(f"保存新的最佳模型，精度: {best_precision:.4f}")
+                    # 训练
+                    avg_loss = train_one_epoch(model, optimizer, train_loader, device, epoch, config)
+                    
+                    # 更新学习率
+                    lr_scheduler.step()
+                    
+                    # 每隔几个epoch评估一次
+                    if (epoch + 1) % 5 == 0 or epoch == total_epochs - 1:
+                        logger.info("进行模型评估...")
+                        metrics = evaluate_model(model, val_loader, device, config)
+                        
+                        # 早停检查
+                        if early_stopping(metrics['precision']):
+                            logger.warning(f"早停机制触发！连续{early_stopping.patience}轮无改进（阈值: {early_stopping.min_delta}）")
+                            logger.info(f"当前精度: {metrics['precision']:.4f}, 最佳精度: {early_stopping.best_score:.4f}")
+                            logger.info("停止训练，使用最佳模型")
+                            break
+                        
+                        # 保存检查点
+                        save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path)
+                        
+                        # 保存最佳模型
+                        is_best = metrics['precision'] > best_precision
+                        if is_best:
+                            best_precision = metrics['precision']
+                            save_model_and_logs(model, config, log_file, epoch, metrics)
+                            save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path, is_best=True)
+                            logger.info(f"保存新的最佳模型，精度: {best_precision:.4f}")
+                    
+                    # 定期保存检查点（即使不是评估时期）
+                    elif (epoch + 1) % config['training'].get('checkpoint_period', 500) == 0:
+                        dummy_metrics = {'precision': best_precision}
+                        save_checkpoint(model, optimizer, lr_scheduler, epoch, dummy_metrics, config, checkpoint_path)
+                        
+            except KeyboardInterrupt:
+                logger.warning("="*60)
+                logger.warning("检测到用户中断 (Ctrl+C)")
+                logger.warning("="*60)
+                
+                # 安全保存当前状态
+                logger.info("正在安全保存训练状态...")
+                
+                # 如果有最新的评估结果，使用它；否则使用当前最佳精度
+                if 'metrics' in locals():
+                    current_metrics = metrics
+                else:
+                    current_metrics = {'precision': best_precision}
+                
+                # 保存当前检查点
+                save_checkpoint(model, optimizer, lr_scheduler, epoch, current_metrics, config, checkpoint_path)
+                
+                # 确保最佳模型已保存
+                best_checkpoint_path = os.path.join(config['training']['output_dir'], "checkpoint_best.pth")
+                if os.path.exists(best_checkpoint_path):
+                    logger.info(f"最佳模型已存在，精度: {best_precision:.4f}")
+                else:
+                    logger.info("保存当前状态为最佳模型...")
+                    save_checkpoint(model, optimizer, lr_scheduler, epoch, current_metrics, config, checkpoint_path, is_best=True)
+                    save_model_and_logs(model, config, log_file, epoch, current_metrics)
+                
+                logger.info("训练状态已安全保存，可以安全退出")
+                logger.info("使用 --resume 参数可以从中断点继续训练")
+                raise  # 重新抛出异常以正常退出
         
         logger.info("="*60)
         logger.info("训练/评估完成！")
         logger.info("="*60)
+        
+    except KeyboardInterrupt:
+        logger = logging.getLogger(__name__)
+        logger.warning("="*60)
+        logger.warning("训练被用户中断")
+        logger.warning("="*60)
+        logger.info("如果需要继续训练，请使用 --resume 参数")
+        return 0  # 正常退出，因为这是用户主动中断
         
     except Exception as e:
         logger = logging.getLogger(__name__)
