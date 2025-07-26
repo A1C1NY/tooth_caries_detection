@@ -511,12 +511,7 @@ def main():
             
             # 计算总epoch数（从max_iter转换）
             max_iter = config['training']['max_iter']
-            total_epochs = max_iter // len(train_loader) + 1
-            
-            logger.info(f"训练参数:")
-            logger.info(f"  总epochs: {total_epochs}")
-            logger.info(f"  批次大小: {config['data']['dataloader']['batch_size']}")
-            logger.info(f"  学习率: {config['training']['base_lr']}")
+            base_total_epochs = max_iter // len(train_loader) + 1
             
             # 检查点路径
             checkpoint_path = os.path.join(config['training']['output_dir'], "checkpoint.pth")
@@ -524,8 +519,34 @@ def main():
             # 加载检查点（如果存在且启用resume）
             start_epoch = 0
             best_precision = 0.0
+            
+            # 检查现有最佳模型的精度，避免被较差结果覆盖
+            best_checkpoint_path = os.path.join(config['training']['output_dir'], "checkpoint_best.pth")
+            if os.path.exists(best_checkpoint_path):
+                try:
+                    best_checkpoint = torch.load(best_checkpoint_path, map_location='cpu')
+                    historical_best = best_checkpoint.get('metrics', {}).get('precision', 0.0)
+                    if historical_best > 0:
+                        best_precision = historical_best
+                        logger.info(f"读取到历史最佳精度: {best_precision:.4f}")
+                except Exception as e:
+                    logger.warning(f"无法读取历史最佳精度: {e}")
+            
             if args.resume:
-                start_epoch, best_precision = load_checkpoint(model, optimizer, lr_scheduler, checkpoint_path)
+                start_epoch, resume_precision = load_checkpoint(model, optimizer, lr_scheduler, checkpoint_path)
+                # 使用resume精度和历史最佳精度中的较大值
+                best_precision = max(best_precision, resume_precision)
+                logger.info(f"Resume训练，当前最佳精度: {best_precision:.4f}")
+                # 确保resume时有足够的epoch可以继续训练
+                total_epochs = start_epoch + base_total_epochs
+            else:
+                total_epochs = base_total_epochs
+            
+            logger.info(f"训练参数:")
+            logger.info(f"  总epochs: {total_epochs}")
+            logger.info(f"  开始epoch: {start_epoch + 1}")
+            logger.info(f"  批次大小: {config['data']['dataloader']['batch_size']}")
+            logger.info(f"  学习率: {config['training']['base_lr']}")
             
             # 10. 训练循环
             early_stopping = EarlyStopping(patience=5, min_delta=0.001)
@@ -540,33 +561,27 @@ def main():
                     # 更新学习率
                     lr_scheduler.step()
                     
-                    # 每隔几个epoch评估一次
-                    if (epoch + 1) % 5 == 0 or epoch == total_epochs - 1:
-                        logger.info("进行模型评估...")
-                        metrics = evaluate_model(model, val_loader, device, config)
-                        
-                        # 早停检查
-                        if early_stopping(metrics['precision']):
-                            logger.warning(f"早停机制触发！连续{early_stopping.patience}轮无改进（阈值: {early_stopping.min_delta}）")
-                            logger.info(f"当前精度: {metrics['precision']:.4f}, 最佳精度: {early_stopping.best_score:.4f}")
-                            logger.info("停止训练，使用最佳模型")
-                            break
-                        
-                        # 保存检查点
-                        save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path)
-                        
-                        # 保存最佳模型
-                        is_best = metrics['precision'] > best_precision
-                        if is_best:
-                            best_precision = metrics['precision']
-                            save_model_and_logs(model, config, log_file, epoch, metrics)
-                            save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path, is_best=True)
-                            logger.info(f"保存新的最佳模型，精度: {best_precision:.4f}")
+                    # 每个epoch都进行评估
+                    logger.info("进行模型评估...")
+                    metrics = evaluate_model(model, val_loader, device, config)
                     
-                    # 定期保存检查点（即使不是评估时期）
-                    elif (epoch + 1) % config['training'].get('checkpoint_period', 500) == 0:
-                        dummy_metrics = {'precision': best_precision}
-                        save_checkpoint(model, optimizer, lr_scheduler, epoch, dummy_metrics, config, checkpoint_path)
+                    # 早停检查
+                    if early_stopping(metrics['precision']):
+                        logger.warning(f"早停机制触发！连续{early_stopping.patience}轮无改进（阈值: {early_stopping.min_delta}）")
+                        logger.info(f"当前精度: {metrics['precision']:.4f}, 最佳精度: {early_stopping.best_score:.4f}")
+                        logger.info("停止训练，使用最佳模型")
+                        break
+                    
+                    # 保存检查点
+                    save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path)
+                    
+                    # 保存最佳模型
+                    is_best = metrics['precision'] > best_precision
+                    if is_best:
+                        best_precision = metrics['precision']
+                        save_model_and_logs(model, config, log_file, epoch, metrics)
+                        save_checkpoint(model, optimizer, lr_scheduler, epoch, metrics, config, checkpoint_path, is_best=True)
+                        logger.info(f"保存新的最佳模型，精度: {best_precision:.4f}")
                         
             except KeyboardInterrupt:
                 logger.warning("="*60)

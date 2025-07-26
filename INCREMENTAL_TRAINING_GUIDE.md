@@ -159,7 +159,7 @@ tail -f experiments/logs/training_*.log
 import torch
 
 # 加载最佳检查点
-checkpoint = torch.load("experiments/detectron2_output/checkpoint_best.pth")
+checkpoint = torch.load("experiments/tooth_caries_model/checkpoint_best.pth")
 print(f"最佳精度: {checkpoint['metrics']['precision']:.4f}")
 print(f"训练轮次: {checkpoint['epoch'] + 1}")
 ```
@@ -193,7 +193,7 @@ def plot_training_progress(log_files):
 ### 1. 保存多个版本
 ```bash
 # 为每轮训练创建备份
-cp experiments/detectron2_output/model_final.pth models/model_round_1.pth
+cp experiments/tooth_caries_model/model_final.pth models/model_round_1.pth
 ```
 
 ### 2. 实验记录
@@ -205,7 +205,7 @@ echo "Round 1: lr=0.00025, precision=0.75" >> experiment_log.txt
 ### 3. 早期验证
 ```bash
 # 每轮训练后立即评估
-python evaluate.py --model experiments/detectron2_output/model_final.pth
+python evaluate.py --model experiments/tooth_caries_model/model_final.pth
 ```
 
 ## 期望效果

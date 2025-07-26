@@ -65,7 +65,7 @@ data/annotations/
 *.tiff
 
 # Experiment outputs
-experiments/detectron2_output/
+experiments/tooth_caries_model/
 experiments/predictions/
 experiments/logs/
 experiments/tensorboard/
