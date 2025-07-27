@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from train import COCODataset, create_model, collate_fn, get_transform, load_config
 
-def visualize_and_save(model, data_loader, device, save_dir, val_dataset, max_images=None):
+def visualize_and_save(model, data_loader, device, save_dir, val_dataset, config, max_images=None):
     """
     可视化并保存图片
     """
@@ -85,10 +85,13 @@ def visualize_and_save(model, data_loader, device, save_dir, val_dataset, max_im
                 
                 print(f"   处理图片: {original_filename}")
                 
+                # 获取置信度阈值
+                score_threshold = config.get('inference', {}).get('score_threshold', 0.5)
+                
                 # 创建图片
                 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
                 ax.imshow(image)
-                ax.set_title(f'File: {filename_for_title} - Green: Ground Truth, Red: Predictions', 
+                ax.set_title(f'File: {filename_for_title}\nGreen: Ground Truth, Red: Predictions (Score>{score_threshold})', 
                            fontsize=14, fontweight='bold')
                 
                 # 绘制真实框 (绿色)
@@ -100,8 +103,8 @@ def visualize_and_save(model, data_loader, device, save_dir, val_dataset, max_im
                                            linewidth=3, edgecolor='green', facecolor='none')
                     ax.add_patch(rect)
                 
-                # 绘制预测框 (红色，置信度>0.5)
-                high_conf_mask = pred['scores'] > 0.5
+                # 绘制预测框 (红色，使用配置文件中的阈值)
+                high_conf_mask = pred['scores'] > score_threshold
                 pred_boxes = pred['boxes'][high_conf_mask].cpu().numpy()
                 pred_scores = pred['scores'][high_conf_mask].cpu().numpy()
                 
@@ -166,7 +169,7 @@ def main():
     print(f"   验证集加载完成，共 {len(val_dataset)} 张图片")
     
     save_directory = 'data/visualizations'
-    visualize_and_save(model, val_loader, device, save_directory, val_dataset, max_images=None)
+    visualize_and_save(model, val_loader, device, save_directory, val_dataset, config, max_images=None)
     
     print(f"   可视化图片已保存到: {save_directory}")
 
