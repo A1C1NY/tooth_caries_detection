@@ -79,7 +79,7 @@ validation:
 
 # 推理配置
 inference:
-  model_path: "experiments/tooth_caries_model/model_final.pth"
+  model_path: "experiments/tooth_caries_model/checkpoint_best.pth"
   score_threshold: 0.5
   output_dir: "experiments/predictions"
   save_visualizations: true
