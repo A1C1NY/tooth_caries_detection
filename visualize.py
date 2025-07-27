@@ -130,10 +130,11 @@ def visualize_and_save(model, data_loader, device, save_dir, val_dataset, max_im
     print(f"\n   完成！共保存 {count} 张可视化图片")
 
 def main():
-    # 加载配置
-    config = load_config('config/config.yaml')
+    # 加载配置 - 使用训练时的实际配置文件
+    config = load_config('experiments/tooth_caries_model/config.yaml')
     device = torch.device(config['hardware']['device'])
     print(f"使用设备: {device}")
+    print(f"使用配置文件: experiments/tooth_caries_model/config.yaml")
     
     # 创建模型并加载权重
     model = create_model(config['data']['num_classes'] + 1, config)
