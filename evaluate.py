@@ -334,17 +334,38 @@ def print_detailed_report(results, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description="详细模型评估脚本")
-    parser.add_argument('--config', type=str, required=True, help="配置文件路径")
+    parser.add_argument('--config', type=str, default='config/config.yaml', help="配置文件路径")
     parser.add_argument('--output_dir', type=str, default='evaluation_results', help="输出目录")
 
     args = parser.parse_args()
 
+    # 如果在 VS Code 中直接运行，使用默认配置
+    if not os.path.exists(args.config):
+        # 尝试常见的配置文件路径
+        possible_configs = [
+            'config/config.yaml',
+            'config.yaml',
+            '../config/config.yaml'
+        ]
+        for config_path in possible_configs:
+            if os.path.exists(config_path):
+                args.config = config_path
+                break
+        else:
+            print("   未找到配置文件！请确保以下路径之一存在配置文件：")
+            for path in possible_configs:
+                print(f"   - {path}")
+            return 1
+
+    print(f"   使用配置文件: {args.config}")
+    print(f"   输出目录: {args.output_dir}")
+    print()
+
     # 加载配置
     config = load_config(args.config)
 
-    print("加载配置结束")
-
-    print("开始评估")
+    print("   配置加载完成")
+    print("   开始评估...")
 
     device = torch.device(config['hardware']['device'])
 
@@ -364,7 +385,7 @@ def main():
         collate_fn=collate_fn
     )
 
-    print("验证集加载完成")
+    print("   验证集加载完成")
 
     # 创建和加载模型
     model = create_model(config['data']['num_classes'] + 1, config)
@@ -374,11 +395,21 @@ def main():
         checkpoint = torch.load(config['inference']['model_path'])
         model.load_state_dict(checkpoint['model_state_dict'])
         print(f"   模型加载完成: {config['inference']['model_path']}")
+        
+        # 显示模型信息
+        if 'metrics' in checkpoint:
+            metrics = checkpoint['metrics']
+            print(f"   模型历史性能:")
+            print(f"   - 精度: {metrics.get('precision', 'N/A'):.4f}")
+            print(f"   - 总预测数: {metrics.get('total_predictions', 'N/A')}")
+            print(f"   - 正确预测数: {metrics.get('correct_predictions', 'N/A')}")
+        print()
     else:
-        print("   未找到训练好的模型!")
-        return
+        print(f"   未找到训练好的模型: {config['inference']['model_path']}")
+        return 1
     
     # 多阈值评估
+    print("   开始多阈值评估...")
     results = evaluate_model(
         model, val_loader, device,
         iou_thresholds=[0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
@@ -389,14 +420,28 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     # 生成分析图表
+    print("   生成分析图表...")
     best_conf, best_iou, best_f1 = create_analysis_plots(results, args.output_dir)
     
     # 生成详细报告
+    print("   生成详细报告...")
     print_detailed_report(results, args.output_dir)
     
     print(f"\n   详细评估完成!")
     print(f"   最佳F1分数: {best_f1:.4f} (Conf={best_conf}, IoU={best_iou})")
     print(f"   结果保存在: {args.output_dir}")
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    try:
+        exit_code = main()
+        exit(exit_code)
+    except KeyboardInterrupt:
+        print("\n\n    评估被用户中断")
+        exit(1)
+    except Exception as e:
+        print(f"\n   评估过程中发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)

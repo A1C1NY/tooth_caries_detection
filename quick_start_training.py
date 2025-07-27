@@ -126,8 +126,13 @@ def check_existing_model():
         log_info = parse_training_logs(output_dir)
         
         if log_info:
-            # 使用找到的第一个模型文件
-            checkpoint_path = model_files[0][1]
+            # 使用配置文件中指定的推理模型路径，而不是第一个找到的模型文件
+            # 优先使用配置文件中的推理模型路径
+            inference_model_path = config.get('inference', {}).get('model_path', '')
+            if inference_model_path and os.path.exists(inference_model_path):
+                checkpoint_path = os.path.abspath(inference_model_path)
+            else:
+                checkpoint_path = model_files[0][1]  # fallback到第一个找到的
             
             model_info = {
                 'epoch': log_info['epoch'],
@@ -142,9 +147,16 @@ def check_existing_model():
         else:
             # 如果无法从日志解析，尝试从checkpoint中读取
             try:
-                checkpoint_path = model_files[0][1]
+                # 优先使用配置文件中的推理模型路径
+                inference_model_path = config.get('inference', {}).get('model_path', '')
+                if inference_model_path and os.path.exists(inference_model_path):
+                    checkpoint_path = os.path.abspath(inference_model_path)
+                else:
+                    checkpoint_path = model_files[0][1]  # fallback到第一个找到的
+                
                 checkpoint = torch.load(checkpoint_path, map_location='cpu')
                 metrics = checkpoint.get('metrics', {})
+
                 
                 model_info = {
                     'epoch': checkpoint.get('epoch', 0),
@@ -250,6 +262,18 @@ def main():
     print(f"\n执行命令: {' '.join(cmd)}")
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("\n" + "="*60)
+    # 验证模型路径一致性
+    if choice in ['2', '3'] and model_info:  # 增量训练或评估时
+        config_model_path = config.get('inference', {}).get('model_path', '')
+        if config_model_path:
+            config_model_path = os.path.abspath(config_model_path)
+            display_model_path = model_info['checkpoint_path']
+            if config_model_path != display_model_path:
+                print(f"       警告：显示的模型路径与配置文件不一致！")
+                print(f"   显示路径: {display_model_path}")
+                print(f"   配置路径: {config_model_path}")
+                print(f"   训练将使用配置文件中的路径")
+                print()
     
     try:
         # 运行命令

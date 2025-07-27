@@ -99,8 +99,7 @@ def main():
         print(f"\n   开始第 {round_num}/{args.rounds} 轮训练")
         print(f"   时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # 第一轮不使用resume，后续轮次使用resume
-        resume = round_num > 1
+        resume = True
         
         # 运行训练
         success = run_training_with_live_output(args.config, resume)
