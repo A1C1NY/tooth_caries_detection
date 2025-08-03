@@ -44,7 +44,7 @@ data:
     num_workers: 4
     shuffle: true
 
-# Detectron2模型配置
+# 模型配置
 model:
   config_file: "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
   weights: "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
