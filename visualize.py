@@ -174,8 +174,8 @@ def visualize_and_save(model, data_loader, device, save_dir, val_dataset, config
                 save_path = os.path.join(save_dir, f'{image_number}_{original_filename}_prediction.png')
                 plt.savefig(save_path, dpi=200, bbox_inches='tight')
                 plt.close()
-                # 新增：计算score并记录
-                tp, fp, fn, score = compute_image_score(gt_boxes, gt_labels, pred_boxes, pred_labels, iou_thresh=0.5)
+                # 新增：计算score并记录，IoU阈值改为0.3
+                tp, fp, fn, score = compute_image_score(gt_boxes, gt_labels, pred_boxes, pred_labels, iou_thresh=0.3)
                 image_scores.append({
                     'score': score,
                     'path': save_path,
