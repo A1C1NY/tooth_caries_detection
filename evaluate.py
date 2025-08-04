@@ -369,7 +369,6 @@ def create_analysis_plots(results, output_dir):
     blue_plot_path = os.path.join(output_dir, 'best_performance_blue.png')
     fig2.savefig(blue_plot_path, dpi=300, bbox_inches='tight')
     plt.close(fig2)
-    print(f"   蓝色系最佳性能图已保存: {blue_plot_path}")
     
     plt.tight_layout()
     
@@ -377,9 +376,174 @@ def create_analysis_plots(results, output_dir):
     plot_path = os.path.join(output_dir, 'detailed_analysis.png')
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     print(f"   分析图表已保存: {plot_path}")
-    
+
+    # 新增：生成适合A4粘贴的2x3大图（A4比例，内容同上）
+    fig_a4, axes_a4 = plt.subplots(2, 3, figsize=(11.7, 8.3))  # A4横向尺寸，单位英寸
+    # 依次绘制六个子图
+    # 1. Precision vs IoU
+    for conf_th in conf_thresholds:
+        precisions = [results[conf_th][iou]['precision'] for iou in iou_thresholds]
+        axes_a4[0, 0].plot(iou_thresholds, precisions, marker='o', label=f'Conf={conf_th}')
+    axes_a4[0, 0].set_xlabel('IoU Threshold')
+    axes_a4[0, 0].set_ylabel('Precision')
+    axes_a4[0, 0].set_title('Precision vs IoU Threshold')
+    axes_a4[0, 0].legend()
+    axes_a4[0, 0].grid(True, alpha=0.3)
+    # 2. Recall vs IoU
+    for conf_th in conf_thresholds:
+        recalls = [results[conf_th][iou]['recall'] for iou in iou_thresholds]
+        axes_a4[0, 1].plot(iou_thresholds, recalls, marker='s', label=f'Conf={conf_th}')
+    axes_a4[0, 1].set_xlabel('IoU Threshold')
+    axes_a4[0, 1].set_ylabel('Recall')
+    axes_a4[0, 1].set_title('Recall vs IoU Threshold')
+    axes_a4[0, 1].legend()
+    axes_a4[0, 1].grid(True, alpha=0.3)
+    # 3. F1 Score vs IoU
+    for conf_th in conf_thresholds:
+        f1_scores = [results[conf_th][iou]['f1_score'] for iou in iou_thresholds]
+        axes_a4[0, 2].plot(iou_thresholds, f1_scores, marker='^', label=f'Conf={conf_th}')
+    axes_a4[0, 2].set_xlabel('IoU Threshold')
+    axes_a4[0, 2].set_ylabel('F1 Score')
+    axes_a4[0, 2].set_title('F1 Score vs IoU Threshold')
+    axes_a4[0, 2].legend()
+    axes_a4[0, 2].grid(True, alpha=0.3)
+    # 4. Precision-Recall曲线
+    for conf_th in conf_thresholds:
+        precisions = [results[conf_th][iou]['precision'] for iou in iou_thresholds]
+        recalls = [results[conf_th][iou]['recall'] for iou in iou_thresholds]
+        axes_a4[1, 0].plot(recalls, precisions, marker='o', label=f'Conf={conf_th}')
+    axes_a4[1, 0].set_xlabel('Recall')
+    axes_a4[1, 0].set_ylabel('Precision')
+    axes_a4[1, 0].set_title('Precision-Recall Curves')
+    axes_a4[1, 0].legend()
+    axes_a4[1, 0].grid(True, alpha=0.3)
+    # 5. 预测数量统计
+    conf_th = 0.5
+    tps = [results[conf_th][iou]['tp'] for iou in iou_thresholds]
+    fps = [results[conf_th][iou]['fp'] for iou in iou_thresholds]
+    fns = [results[conf_th][iou]['fn'] for iou in iou_thresholds]
+    x = np.arange(len(iou_thresholds))
+    width = 0.25
+    axes_a4[1, 1].bar(x - width, tps, width, label='True Positives', alpha=0.8, color='green')
+    axes_a4[1, 1].bar(x, fps, width, label='False Positives', alpha=0.8, color='red')
+    axes_a4[1, 1].bar(x + width, fns, width, label='False Negatives', alpha=0.8, color='orange')
+    axes_a4[1, 1].set_xlabel('IoU Threshold')
+    axes_a4[1, 1].set_ylabel('Count')
+    axes_a4[1, 1].set_title(f'Detection Statistics (Conf={conf_th})')
+    axes_a4[1, 1].set_xticks(x)
+    axes_a4[1, 1].set_xticklabels([f'{iou:.1f}' for iou in iou_thresholds])
+    axes_a4[1, 1].legend()
+    axes_a4[1, 1].grid(True, alpha=0.3)
+    # 6. 最佳性能总结
+    best_f1 = 0
+    best_conf = 0
+    best_iou = 0
+    for conf_th in results:
+        for iou_th in results[conf_th]:
+            f1 = results[conf_th][iou_th]['f1_score']
+            if f1 > best_f1:
+                best_f1 = f1
+                best_conf = conf_th
+                best_iou = iou_th
+    best_metrics = results[best_conf][best_iou]
+    metrics_names = ['Precision', 'Recall', 'F1 Score']
+    metrics_values = [best_metrics['precision'], best_metrics['recall'], best_metrics['f1_score']]
+    bars = axes_a4[1, 2].bar(metrics_names, metrics_values, color=['skyblue', 'lightgreen', 'salmon'])
+    axes_a4[1, 2].set_ylabel('Score')
+    axes_a4[1, 2].set_title(f'Best Performance\n(Conf={best_conf}, IoU={best_iou})')
+    axes_a4[1, 2].set_ylim(0, 1)
+    for bar, value in zip(bars, metrics_values):
+        axes_a4[1, 2].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, f'{value:.3f}', ha='center', va='bottom')
+    plt.tight_layout()
+    a4_path = os.path.join(output_dir, 'analysis_a4.png')
+    fig_a4.savefig(a4_path, dpi=300, bbox_inches='tight')
+    plt.close(fig_a4)
+    print(f"   A4分析图表已保存: {a4_path}")
+
+    # 新增：生成2列3行（2x3）排布的大图，内容与原3x2一致
+    fig_2x3, axes_2x3 = plt.subplots(3, 2, figsize=(12, 18))  # 不改dpi和分辨率，只改排布
+    # 1. Precision vs IoU
+    for conf_th in conf_thresholds:
+        precisions = [results[conf_th][iou]['precision'] for iou in iou_thresholds]
+        axes_2x3[0, 0].plot(iou_thresholds, precisions, marker='o', label=f'Conf={conf_th}')
+    axes_2x3[0, 0].set_xlabel('IoU Threshold')
+    axes_2x3[0, 0].set_ylabel('Precision')
+    axes_2x3[0, 0].set_title('Precision vs IoU Threshold')
+    axes_2x3[0, 0].legend()
+    axes_2x3[0, 0].grid(True, alpha=0.3)
+    # 2. Recall vs IoU
+    for conf_th in conf_thresholds:
+        recalls = [results[conf_th][iou]['recall'] for iou in iou_thresholds]
+        axes_2x3[0, 1].plot(iou_thresholds, recalls, marker='s', label=f'Conf={conf_th}')
+    axes_2x3[0, 1].set_xlabel('IoU Threshold')
+    axes_2x3[0, 1].set_ylabel('Recall')
+    axes_2x3[0, 1].set_title('Recall vs IoU Threshold')
+    axes_2x3[0, 1].legend()
+    axes_2x3[0, 1].grid(True, alpha=0.3)
+    # 3. F1 Score vs IoU
+    for conf_th in conf_thresholds:
+        f1_scores = [results[conf_th][iou]['f1_score'] for iou in iou_thresholds]
+        axes_2x3[1, 0].plot(iou_thresholds, f1_scores, marker='^', label=f'Conf={conf_th}')
+    axes_2x3[1, 0].set_xlabel('IoU Threshold')
+    axes_2x3[1, 0].set_ylabel('F1 Score')
+    axes_2x3[1, 0].set_title('F1 Score vs IoU Threshold')
+    axes_2x3[1, 0].legend()
+    axes_2x3[1, 0].grid(True, alpha=0.3)
+    # 4. Precision-Recall曲线
+    for conf_th in conf_thresholds:
+        precisions = [results[conf_th][iou]['precision'] for iou in iou_thresholds]
+        recalls = [results[conf_th][iou]['recall'] for iou in iou_thresholds]
+        axes_2x3[1, 1].plot(recalls, precisions, marker='o', label=f'Conf={conf_th}')
+    axes_2x3[1, 1].set_xlabel('Recall')
+    axes_2x3[1, 1].set_ylabel('Precision')
+    axes_2x3[1, 1].set_title('Precision-Recall Curves')
+    axes_2x3[1, 1].legend()
+    axes_2x3[1, 1].grid(True, alpha=0.3)
+    # 5. 预测数量统计
+    conf_th = 0.5
+    tps = [results[conf_th][iou]['tp'] for iou in iou_thresholds]
+    fps = [results[conf_th][iou]['fp'] for iou in iou_thresholds]
+    fns = [results[conf_th][iou]['fn'] for iou in iou_thresholds]
+    x = np.arange(len(iou_thresholds))
+    width = 0.25
+    axes_2x3[2, 0].bar(x - width, tps, width, label='True Positives', alpha=0.8, color='green')
+    axes_2x3[2, 0].bar(x, fps, width, label='False Positives', alpha=0.8, color='red')
+    axes_2x3[2, 0].bar(x + width, fns, width, label='False Negatives', alpha=0.8, color='orange')
+    axes_2x3[2, 0].set_xlabel('IoU Threshold')
+    axes_2x3[2, 0].set_ylabel('Count')
+    axes_2x3[2, 0].set_title(f'Detection Statistics (Conf={conf_th})')
+    axes_2x3[2, 0].set_xticks(x)
+    axes_2x3[2, 0].set_xticklabels([f'{iou:.1f}' for iou in iou_thresholds])
+    axes_2x3[2, 0].legend()
+    axes_2x3[2, 0].grid(True, alpha=0.3)
+    # 6. 最佳性能总结
+    best_f1 = 0
+    best_conf = 0
+    best_iou = 0
+    for conf_th in results:
+        for iou_th in results[conf_th]:
+            f1 = results[conf_th][iou_th]['f1_score']
+            if f1 > best_f1:
+                best_f1 = f1
+                best_conf = conf_th
+                best_iou = iou_th
+    best_metrics = results[best_conf][best_iou]
+    metrics_names = ['Precision', 'Recall', 'F1 Score']
+    metrics_values = [best_metrics['precision'], best_metrics['recall'], best_metrics['f1_score']]
+    bars = axes_2x3[2, 1].bar(metrics_names, metrics_values, color=['skyblue', 'lightgreen', 'salmon'])
+    axes_2x3[2, 1].set_ylabel('Score')
+    axes_2x3[2, 1].set_title(f'Best Performance\n(Conf={best_conf}, IoU={best_iou})')
+    axes_2x3[2, 1].set_ylim(0, 1)
+    for bar, value in zip(bars, metrics_values):
+        axes_2x3[2, 1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, f'{value:.3f}', ha='center', va='bottom')
+    plt.tight_layout()
+    path_2x3 = os.path.join(output_dir, 'analysis_2x3.png')
+    fig_2x3.savefig(path_2x3, dpi=300, bbox_inches='tight')
+    plt.close(fig_2x3)
+    print(f"   2x3分析图表已保存: {path_2x3}")
+
     plt.show()
-    
+
     return best_conf, best_iou, best_f1
 
 def print_detailed_report(results, output_dir):
